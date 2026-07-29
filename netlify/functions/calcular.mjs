@@ -5,7 +5,8 @@ export default async (req, context) => {
 
     // Pega o parâmetro 'expressao' da URL
     // Exemplo: /.netlify/functions/calcular?expressao=(1500 * 0.05) + 200
-    const expressao = url.searchParams.get("expressao");
+    let expressao = url.searchParams.get("expressao");
+
 
     if (!expressao) {
         return new Response(
@@ -15,6 +16,7 @@ export default async (req, context) => {
     }
 
     try {
+        expressao = expressao.replace(' ', '+');
         // Avalia a string matemática de forma ultra segura
         const resultado = evaluate(expressao);
 
