@@ -18,6 +18,7 @@
   },
   "homepage": "https://github.com/geanCarneiro/FunctionCallingLM#readme",
   "dependencies": {
+    "dayjs": "^1.11.21",
     "mathjs": "^15.2.0"
   }
 }
