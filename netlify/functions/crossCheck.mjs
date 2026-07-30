@@ -18,7 +18,7 @@ export default async (req, context) => {
     }
 
     try {
-        const rules = JSON.parse(regrasJson);
+        const rules = JSON.parse(regrasJson.replaceAll('p', '+'));
 
         // Valida se o JSON enviado é um Array
         if (!Array.isArray(rules)) {

@@ -18,8 +18,8 @@ export default async (req, context) => {
         let ausentes = [];
 
         if (blocoAnterior) {
-            const mapAnterior = parseBlocoToMap(blocoAnterior);
-            const mapAtual = parseBlocoToMap(bloco);
+            const mapAnterior = parseBlocoToMap(blocoAnterior.replaceAll('p', '+'));
+            const mapAtual = parseBlocoToMap(bloco.replaceAll('p', '+'));
 
             ausentes = compararFragmentos(mapAnterior, mapAtual);
         }
