@@ -64,7 +64,7 @@ export default async (req, context) => {
 
         if (ausentes.length > 0) {
             html += `
-                <b>Lista de campos ausentes</b>
+                <h5>Lista de campos ausentes</h5>
                 <ul>
                     ${listaAusentes}
                 </ul>
