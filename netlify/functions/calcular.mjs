@@ -1,11 +1,13 @@
-import { evaluate } from 'mathjs';
+import {evaluate, create, all} from 'mathjs';
+
+export const math = create(all, {number: 'BigNumber', precision: 64});
 
 export default async (req, context) => {
     const url = new URL(req.url);
 
     // Pega o parâmetro 'expressao' da URL
     // Exemplo: /.netlify/functions/calcular?expressao=(1500 * 0.05) + 200
-    let expressao = url.searchParams.get("expressao");
+    let expressao = url.searchParams.get("exp");
 
 
     if (!expressao) {
@@ -16,21 +18,37 @@ export default async (req, context) => {
     }
 
     try {
-        expressao = expressao.replace(' ', '+');
+        expressao = expressao.replaceAll('p', '+');
+        const expressoes = expressao.split(';').filter(e => e.trim().length > 0);
         // Avalia a string matemática de forma ultra segura
-        const resultado = evaluate(expressao);
+
+        const expressoesListHtml = expressoes.map(exp => {
+            let str = `
+                <tr>
+                    <td>${exp}</td>
+                    <td>${math.format(math.evaluate(exp), { notation: 'fixed'}) }</td>
+                </tr>
+            `
+            return str;
+        }).join('\n');
 
         // Monta o HTML limpo pra IA/NotebookLM ler
         const html = `
       <!DOCTYPE html>
       <html lang="pt-BR">
-      <head><meta charset="UTF-8"><title>Resultado do Cálculo</title></head>
+      <head><meta charset="UTF-8"><title>Resultado dos Cálculos</title></head>
       <body>
-        <h1>Relatório de Processamento Exato</h1>
-        <p><strong>Expressão Recebida:</strong> <code>${expressao}</code></p>
-        <hr>
-        <h2>Resultado Final: <strong>${resultado}</strong></h2>
-        <p><em>Cálculo executado com precisão pelo servidor.</em></p>
+        <table>
+            <thead>
+                <tr>
+                    <th>Expressão</th>
+                    <th>Resultado</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${expressoesListHtml}
+            </tbody>
+        </table>
       </body>
       </html>
     `;
