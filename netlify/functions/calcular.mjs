@@ -24,31 +24,18 @@ export default async (req, context) => {
 
         const expressoesListHtml = expressoes.map(exp => {
             let str = `
-                <tr>
-                    <td>${exp}</td>
-                    <td>${math.format(math.evaluate(exp), { notation: 'fixed'}) }</td>
-                </tr>
+                ${exp}:${math.format(math.evaluate(exp), { notation: 'fixed'}) }
             `
             return str;
-        }).join('\n');
+        }).join('; ');
 
         // Monta o HTML limpo pra IA/NotebookLM ler
         const html = `
       <!DOCTYPE html>
       <html lang="pt-BR">
       <head><meta charset="UTF-8"><title>Resultado dos Cálculos</title></head>
-      <body>
-        <table>
-            <thead>
-                <tr>
-                    <th>Expressão</th>
-                    <th>Resultado</th>
-                </tr>
-            </thead>
-            <tbody>
-                ${expressoesListHtml}
-            </tbody>
-        </table>
+      <body>        
+        ${expressoesListHtml}
       </body>
       </html>
     `;
