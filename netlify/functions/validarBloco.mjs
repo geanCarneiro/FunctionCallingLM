@@ -7,7 +7,6 @@ export default async (req, context) => {
     const bloco = url.searchParams.get("b");
     const campoSegur = url.searchParams.get("campoHash") ?? 'segur';
 
-
     if (!bloco) {
         return new Response(
             "<h1>Erro</h1><p>Por favor, forneça o parâmetro 'b' na URL.</p>",
@@ -19,26 +18,10 @@ export default async (req, context) => {
         let ausentes = [];
 
         if (blocoAnterior) {
-            const listaDeFragmentosBAnterior = blocoAnterior.split(";").filter(i => i.length > 0);
+            const mapAnterior = parseBlocoToMap(blocoAnterior);
+            const mapAtual = parseBlocoToMap(bloco);
 
-            const mapFragmentosBAnterior = new Map(
-                listaDeFragmentosBAnterior.map( item => {
-                    const [chave, valor] = item.split(":");
-                    return [chave, valor];
-                })
-            )
-
-            const listaDeFragmentosB = bloco.split(";").filter(i => i.length > 0);
-
-            const mapFragmentosB = new Map(
-                listaDeFragmentosB.map( item => {
-                    const [chave, valor] = item.split(":");
-                    return [chave, valor];
-                })
-            )
-
-            ausentes.push(...compararFragmentos(mapFragmentosBAnterior, mapFragmentosB));
-
+            ausentes = compararFragmentos(mapAnterior, mapAtual);
         }
 
         const blocoSemSegur = bloco
@@ -46,21 +29,15 @@ export default async (req, context) => {
             .filter(i => i.length > 0 && i.split(":")[0] !== campoSegur)
             .join(';');
 
-        const listaAusentes = ausentes.map(aus => {
-            let str = `
-                <li>${aus}</li>
-            `
-            return str;
-        }).join('\n');
+        const listaAusentes = ausentes.map(aus => `<li>${aus}</li>`).join('\n');
 
-        // Monta o HTML limpo pra IA/NotebookLM ler
         let html = `
           <!DOCTYPE html>
           <html lang="pt-BR">
           <head><meta charset="UTF-8"><title>Resultado da validação</title></head>
           <body>
             <p><b>${campoSegur}:</b> ${crypto.createHash('sha256').update(blocoSemSegur, 'utf8').digest('hex')};</p>
-           `;
+        `;
 
         if (ausentes.length > 0) {
             html += `
@@ -82,7 +59,6 @@ export default async (req, context) => {
         });
 
     } catch (error) {
-        // Se a string contiver uma expressão inválida (ex: "2++5" ou "abc")
         return new Response(
             `<p>erro na validação de bloco</p>`,
             { status: 400, headers: { "Content-Type": "text/html; charset=utf-8" } }
@@ -90,52 +66,67 @@ export default async (req, context) => {
     }
 };
 
-function compararFragmentos(fragmentosAnterior, fragmentos) {
-    // 1. Uso correto do Array.from (no singular)
-    const keysAnt = Array.from(fragmentosAnterior.keys());
-    const keys = Array.from(fragmentos.keys());
+/**
+ * Converte a string do bloco em um Map respeitando chaves aninhadas {...}
+ */
+function parseBlocoToMap(str) {
+    const map = new Map();
+    if (!str) return map;
 
-    // Pega as chaves novas que não existiam no bloco anterior
-    let ausentes = keysAnt.filter(k => !keys.includes(k));
+    let buffer = "";
+    let level = 0;
+    const items = [];
 
-    for (const key of keys) {
-        if (ausentes.includes(key)) continue;
+    // Separa os itens por ';' ignorando os ';' dentro de {...}
+    for (let i = 0; i < str.length; i++) {
+        const char = str[i];
+        if (char === '{') level++;
+        if (char === '}') level--;
 
-        let valueMap = null;
-        let valueAntMap = null;
-
-        const valActual = fragmentos.get(key);
-        const valAnt = fragmentosAnterior.get(key);
-
-        // Trata sub-objetos com {...}
-        if (valActual && valActual.startsWith("{") && valActual.endsWith("}")) {
-            valueMap = new Map(
-                valActual.slice(1, -1).split(';').filter(Boolean).map(item => {
-                    const [chave, valor] = item.split(":");
-                    return [chave, valor];
-                })
-            );
+        if (char === ';' && level === 0) {
+            if (buffer.trim()) items.push(buffer.trim());
+            buffer = "";
+        } else {
+            buffer += char;
         }
+    }
+    if (buffer.trim()) items.push(buffer.trim());
 
-        if (valAnt && valAnt.startsWith("{") && valAnt.endsWith("}")) {
-            valueAntMap = new Map(
-                valAnt.slice(1, -1).split(';').filter(Boolean).map(item => {
-                    const [chave, valor] = item.split(":");
-                    return [chave, valor];
-                })
-            );
+    // Separa chave e valor no PRIMEIRO ':'
+    for (const item of items) {
+        const idx = item.indexOf(':');
+        if (idx !== -1) {
+            const chave = item.slice(0, idx).trim();
+            const valor = item.slice(idx + 1).trim();
+            map.set(chave, valor);
         }
+    }
 
-        // Se existia sub-objeto no anterior e no atual não
-        if (valueAntMap && !valueMap) {
-            ausentes.push(...Array.from(valueAntMap.keys()).map(k => `${key}.${k}`));
-            continue;
-        }
+    return map;
+}
 
-        // Se ambos têm sub-objetos, faz a validação recursiva passando valueMap
-        if (valueMap && valueAntMap) {
-            const subAusentes = compararFragmentos(valueAntMap, valueMap);
-            ausentes.push(...subAusentes.map(k => `${key}.${k}`));
+/**
+ * Compara dois Maps recursivamente
+ */
+function compararFragmentos(fragmentosAnterior, fragmentos, prefixo = "") {
+    let ausentes = [];
+
+    for (const [key, valAnt] of fragmentosAnterior.entries()) {
+        const caminhoAtual = prefixo ? `${prefixo}.${key}` : key;
+
+        if (!fragmentos.has(key)) {
+            // Se a chave/bloco não existe no atual, adiciona apenas ela (sem expandir subChaves)
+            ausentes.push(caminhoAtual);
+        } else {
+            const valAtual = fragmentos.get(key);
+
+            // Se ambos são objetos aninhados ({...}), entra recursivamente pra buscar subChaves ausentes
+            if (valAnt.startsWith("{") && valAnt.endsWith("}") && valAtual.startsWith("{") && valAtual.endsWith("}")) {
+                const subMapAnt = parseBlocoToMap(valAnt.slice(1, -1));
+                const subMapAtual = parseBlocoToMap(valAtual.slice(1, -1));
+
+                ausentes.push(...compararFragmentos(subMapAnt, subMapAtual, caminhoAtual));
+            }
         }
     }
 
